@@ -22,7 +22,7 @@ MAGENTA = f"{CSI}35m"
 CYAN = f"{CSI}36m"
 GREY = f"{CSI}37m"
 
-print_stderr = functools.partial(print, file=sys.stderr)
+print_stderr = functools.partial(print, file=sys.stderr, flush=True)
 
 parser = argparse.ArgumentParser(
     description="Parses company websites from clutch.co.",
@@ -170,8 +170,7 @@ async def worker(
 
             website_link = urljoin(website_link, "/")
             print_stderr(f"{GREEN}found website: {website_link}{RESET}")
-            output.write(f"{website_link}\n")
-            output.flush()
+            print(website_link, file=output, flush=True)
         except Exception as e:
             # иногда начинает 403 возвращать, просто подождем
             print_stderr(f"{RED}{e=}{RESET}")
