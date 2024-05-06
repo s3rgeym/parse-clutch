@@ -90,7 +90,7 @@ async def main(argv: Sequence[str] | None = None) -> None:
 
         await asyncio.sleep(1.0)
 
-        with contextlib.suppress(asyncio.CancelledError):
+        try:
             async with asyncio.TaskGroup() as g:
                 for _ in range(args.concurrency):
                     g.create_task(worker(browser, q, args.output, limiter))
@@ -99,6 +99,8 @@ async def main(argv: Sequence[str] | None = None) -> None:
 
                 for _ in range(args.concurrency):
                     q.put_nowait(None)
+        except* BaseException as e:
+            print_stderr(f"{RED}{e=}{RESET}")
 
         await browser.close()
 
@@ -170,9 +172,9 @@ async def worker(
             print_stderr(f"{GREEN}found website: {website_link}{RESET}")
             output.write(f"{website_link}\n")
             output.flush()
-        except Exception as ex:
+        except Exception as e:
             # иногда начинает 403 возвращать, просто подождем
-            print_stderr(f"{RED}error: {ex}{RESET}")
+            print_stderr(f"{RED}{e=}{RESET}")
         finally:
             q.task_done()
             print_stderr(f"{CYAN}queue size: {q.qsize()}{RESET}")
