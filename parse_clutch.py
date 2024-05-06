@@ -22,7 +22,8 @@ MAGENTA = f"{CSI}35m"
 CYAN = f"{CSI}36m"
 GREY = f"{CSI}37m"
 
-print_stderr = functools.partial(print, file=sys.stderr, flush=True)
+print_out = None
+print_err = functools.partial(print, file=sys.stderr, flush=True)
 
 parser = argparse.ArgumentParser(
     description="Parses company websites from clutch.co.",
@@ -67,17 +68,19 @@ parser.add_argument(
 
 
 async def main(argv: Sequence[str] | None = None) -> None:
+    global print_out
     args = parser.parse_args(argv)
+    print_out = functools.partial(print, file=args.output, flush=True)
     playwright: Playwright
     async with async_playwright() as playwright:
         browser: Browser = await playwright.chromium.connect_over_cdp(args.browser_url)
 
         profile_links = await get_profile_links(browser)
 
-        print_stderr(f"{GREEN}total profile links: {len(profile_links)}{RESET}")
+        print_err(f"{GREEN}total profile links: {len(profile_links)}{RESET}")
 
         if args.randomize:
-            print_stderr(f"{CYAN}randomize profile links{RESET}")
+            print_err(f"{CYAN}randomize profile links{RESET}")
             random.shuffle(profile_links)
 
         # Добавляем их в очередь
@@ -93,18 +96,18 @@ async def main(argv: Sequence[str] | None = None) -> None:
         try:
             async with asyncio.TaskGroup() as g:
                 for _ in range(args.concurrency):
-                    g.create_task(worker(browser, q, args.output, limiter))
+                    g.create_task(worker(browser, q, limiter))
 
                 await q.join()
 
                 for _ in range(args.concurrency):
                     q.put_nowait(None)
         except* BaseException as e:
-            print_stderr(f"{RED}{e=}{RESET}")
+            print_err(f"{RED}{e=}{RESET}")
 
         await browser.close()
 
-    print_stderr(f"{YELLOW}all tasks finished!{RESET}")
+    print_err(f"{YELLOW}all tasks finished!{RESET}")
 
 
 async def get_profile_links(browser: Browser) -> list[str]:
@@ -136,7 +139,6 @@ async def get_profile_links(browser: Browser) -> list[str]:
 async def worker(
     browser: Browser,
     q: asyncio.Queue,
-    output: TextIO,
     limiter: AsyncLimiter,
 ) -> None:
     context = await browser.new_context()
@@ -152,10 +154,10 @@ async def worker(
                 break
 
             async with limiter:
-                print_stderr(f"{CYAN}start loading: {link}{RESET}")
+                print_err(f"{CYAN}start loading: {link}{RESET}")
                 response = await page.goto(link, wait_until="load")
 
-            print_stderr(f"{CYAN}page loaded: {response.url}{RESET}")
+            print_err(f"{CYAN}page loaded: {response.url}{RESET}")
 
             # await page.wait_for_selector(".profile-header__title", timeout=5000)
 
@@ -169,14 +171,14 @@ async def worker(
                 continue
 
             website_link = urljoin(website_link, "/")
-            print_stderr(f"{GREEN}found website: {website_link}{RESET}")
-            print(website_link, file=output, flush=True)
+            print_err(f"{GREEN}found website: {website_link}{RESET}")
+            print_out(website_link)
         except Exception as e:
             # иногда начинает 403 возвращать, просто подождем
-            print_stderr(f"{RED}{e=}{RESET}")
+            print_err(f"{RED}{e=}{RESET}")
         finally:
             q.task_done()
-            print_stderr(f"{CYAN}queue size: {q.qsize()}{RESET}")
+            print_err(f"{CYAN}queue size: {q.qsize()}{RESET}")
 
     await context.close()
 
