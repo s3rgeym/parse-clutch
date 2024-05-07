@@ -143,7 +143,6 @@ async def worker(
 ) -> None:
     context = await browser.new_context()
     page = await context.new_page()
-
     await page.set_viewport_size({"width": 1024, "height": 768})
 
     while True:
@@ -170,7 +169,7 @@ async def worker(
             ):
                 continue
 
-            website_link = urljoin(website_link, "/")
+            website_link = urljoin(website_link, "/").rstrip("/")
             print_err(f"{GREEN}found website: {website_link}{RESET}")
             print_out(website_link)
         except Exception as e:
